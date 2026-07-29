@@ -1,0 +1,105 @@
+# QQBot AI Agent 平台 - Docker Compose 部署配置
+# 部署路径: /opt/qqbot/
+#
+# 使用:
+#   启动: docker compose up -d
+#   停止: docker compose down
+#   日志: docker compose logs -f
+#
+# 端口说明:
+#   9090  - Docker Nginx (前端 + API 代理)，因为宿主机 80/443 已被占用
+#   8080  - SpringBoot 后端（调试用，可通过内部网络直接访问）
+#   3000  - NapCat HTTP API
+#   3001  - NapCat WebSocket Server
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # QQBot 后端服务（SpringBoot）
+  # ==========================================
+  qqbot-backend:
+    build:
+      context: ./qqbot-server
+      dockerfile: Dockerfile
+    container_name: qqbot-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_PROFILES_ACTIVE=prod
+      - QQBOT_WS_URL=ws://napcat:3001
+      - QQBOT_WS_TOKEN=${QQBOT_WS_TOKEN}
+      - QQBOT_HTTP_URL=http://napcat:3000
+      - QQBOT_HTTP_TOKEN=${QQBOT_HTTP_TOKEN}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - DASHSCOPE_MODEL=${DASHSCOPE_MODEL:-qwen-plus}
+    volumes:
+      - ./backend/logs:/opt/qqbot/logs
+    networks:
+      - qqbot-network
+    depends_on:
+      - napcat
+
+  # ==========================================
+  # NapCat QQ 机器人客户端（运行 QQ + OneBot）
+  # ==========================================
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: qqbot-napcat
+    restart: unless-stopped
+    environment:
+      - NAPCAT_UID=${NAPCAT_UID:-0}
+      - NAPCAT_GID=${NAPCAT_GID:-0}
+    ports:
+      - "3000:3000"   # HTTP API
+      - "3001:3001"   # WebSocket Server
+    volumes:
+      - ./napcat/data:/app/.config/QQ
+      - ./napcat/config:/app/napcat/config
+    networks:
+      - qqbot-network
+
+  # ==========================================
+  # Nginx 前端静态服务 + 反向代理（Docker 内部）
+  # ==========================================
+  # 注意：宿主机已有 nginx 占用 80/443，Docker nginx 映射到 9090 端口
+  # 如需要域名访问，在宿主机 nginx 中配置 proxy_pass http://127.0.0.1:9090;
+  # 参考同目录下的 nginx/host-nginx-sample.conf
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: qqbot-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-9090}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./qqbot-frontend/dist:/usr/share/nginx/html:ro
+    networks:
+      - qqbot-network
+    depends_on:
+      - qqbot-backend
+
+  # ==========================================
+  # PostgreSQL 数据库（后续阶段使用）
+  # ==========================================
+  # postgres:
+  #   image: pgvector/pgvector:pg16
+  #   container_name: qqbot-postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_DB=qqbot
+  #     - POSTGRES_USER=qqbot
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-qqbot123}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - ./postgres/data:/var/lib/postgresql/data
+  #   networks:
+  #     - qqbot-network
+
+networks:
+  qqbot-network:
+    driver: bridge

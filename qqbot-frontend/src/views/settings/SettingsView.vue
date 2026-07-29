@@ -14,7 +14,7 @@ const loading = ref(false)
 
 /** 设置表单数据 */
 const formData = ref({
-  aiModel: 'qwen-plus',
+  aiModel: 'qwen3.7-max',
   temperature: 0.7,
   maxTokens: 2000,
   wsUrl: 'ws://127.0.0.1:3001',
@@ -65,7 +65,8 @@ onMounted(() => {
       <el-form :model="formData" label-width="140px">
         <el-form-item label="AI 模型">
           <el-select v-model="formData.aiModel" style="width: 240px">
-            <el-option label="qwen-plus (推荐)" value="qwen-plus" />
+            <el-option label="qwen3.7-max (推荐)" value="qwen3.7-max" />
+            <el-option label="qwen-plus" value="qwen-plus" />
             <el-option label="qwen-max" value="qwen-max" />
             <el-option label="qwen-turbo" value="qwen-turbo" />
           </el-select>

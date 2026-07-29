@@ -34,7 +34,8 @@ services:
       - QQBOT_HTTP_URL=http://napcat:3000
       - QQBOT_HTTP_TOKEN=${QQBOT_HTTP_TOKEN}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
-      - DASHSCOPE_MODEL=${DASHSCOPE_MODEL:-qwen-plus}
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-https://ws-ejqzyf5azzcyjs4i.cn-beijing.maas.aliyuncs.com/compatible-mode/v1}
+      - DASHSCOPE_MODEL=${DASHSCOPE_MODEL:-qwen3.7-max}
     volumes:
       - ./backend/logs:/opt/qqbot/logs
     networks:

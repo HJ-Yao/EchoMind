@@ -46,7 +46,7 @@ public class OneBotApi {
     public void sendPrivateMessage(Long userId, String message) {
         JSONObject params = JSONUtil.createObj()
                 .set("user_id", userId)
-                .set("message", message)
+                .set("message", buildMessageArray(message))
                 .set("auto_escape", false);
 
         String result = callApi("send_private_msg", params);
@@ -64,7 +64,7 @@ public class OneBotApi {
     public void sendGroupMessage(Long groupId, String message) {
         JSONObject params = JSONUtil.createObj()
                 .set("group_id", groupId)
-                .set("message", message)
+                .set("message", buildMessageArray(message))
                 .set("auto_escape", false);
 
         String result = callApi("send_group_msg", params);
@@ -110,5 +110,23 @@ public class OneBotApi {
             log.error("OneBot API 调用异常: action={}", action, e);
             return null;
         }
+    }
+
+    /**
+     * 构建 OneBot 消息段数组
+     *
+     * <p>将纯文本消息转换为 OneBot v11 标准消息段格式。
+     * NapCat 4.x 严格要求数组格式，不接受纯字符串。</p>
+     *
+     * @param text 文本内容
+     * @return OneBot 消息段 JSONArray
+     */
+    private cn.hutool.json.JSONArray buildMessageArray(String text) {
+        cn.hutool.json.JSONArray array = new cn.hutool.json.JSONArray();
+        JSONObject segment = JSONUtil.createObj()
+                .set("type", "text")
+                .set("data", JSONUtil.createObj().set("text", text));
+        array.add(segment);
+        return array;
     }
 }

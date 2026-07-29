@@ -36,6 +36,9 @@ services:
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-https://ws-ejqzyf5azzcyjs4i.cn-beijing.maas.aliyuncs.com/compatible-mode/v1}
       - DASHSCOPE_MODEL=${DASHSCOPE_MODEL:-qwen3.7-max}
+      - DB_URL=${DB_URL:-jdbc:postgresql://host.docker.internal:15432/qqbot}
+      - DB_USERNAME=${DB_USERNAME:-qqbot}
+      - DB_PASSWORD=${DB_PASSWORD:-qqbot123}
     volumes:
       - ./backend/logs:/opt/qqbot/logs
     networks:

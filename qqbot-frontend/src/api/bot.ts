@@ -1,5 +1,5 @@
 import { get, post } from '@/utils/request'
-import type { BotStatus, ChatRecord, PageParams, PageResult } from '@/types'
+import type { BotStatus, ChatRecord, AiCharacter, PageParams, PageResult } from '@/types'
 
 /**
  * 机器人状态 API
@@ -37,8 +37,8 @@ export function getChatRecords(params: PageParams): Promise<PageResult<ChatRecor
  *
  * @returns AI 角色列表
  */
-export function getCharacters(): Promise<ChatRecord[]> {
-  return get<ChatRecord[]>('/character/list')
+export function getCharacters(): Promise<AiCharacter[]> {
+  return get<AiCharacter[]>('/character/list')
 }
 
 /**
@@ -57,5 +57,5 @@ export function createCharacter(data: Record<string, unknown>): Promise<unknown>
  * @param id 角色 ID
  */
 export function deleteCharacter(id: number): Promise<unknown> {
-  return post<unknown>('/character/delete', { id })
+  return post<unknown>(`/character/delete?id=${id}`)
 }

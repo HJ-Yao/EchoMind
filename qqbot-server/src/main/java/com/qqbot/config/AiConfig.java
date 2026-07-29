@@ -11,10 +11,11 @@ import org.springframework.context.annotation.Configuration;
 /**
  * SpringAI 配置类
  *
- * <p>配置阿里云百炼平台的 AI 模型连接，通过 OpenAI 兼容接口与百炼 DashScope 对接。
- * 百炼平台提供与 OpenAI API 兼容的接口端点，因此复用 Spring AI 的 OpenAI Starter。</p>
+ * <p>配置阿里云百炼平台的 AI 模型连接，通过 OpenAI 兼容接口与百炼 MaaS 对接。
+ * 百炼 MaaS 提供与 OpenAI API 兼容的接口端点，因此复用 Spring AI 的 OpenAI Starter。</p>
  *
- * <p>百炼 OpenAI 兼容端点：https://dashscope.aliyuncs.com/compatible-mode/v1</p>
+ * <p>百炼 MaaS 专属端点：ws-ejqzyf5azzcyjs4i.cn-beijing.maas.aliyuncs.com
+ * OpenAI 兼容路径：/compatible-mode/v1</p>
  *
  * @author QQbot Team
  * @since 2026-07-29
@@ -35,9 +36,9 @@ public class AiConfig {
     private String baseUrl;
 
     /**
-     * 模型名称（如 qwen-plus, qwen-max）
+     * 模型名称（如 qwen3.7-max, qwen-plus）
      */
-    @Value("${qqbot.ai.dashscope.model:qwen-plus}")
+    @Value("${qqbot.ai.dashscope.model:qwen3.7-max}")
     private String model;
 
     /**
@@ -49,17 +50,23 @@ public class AiConfig {
     /**
      * 最大 Token 数
      */
-    @Value("${qqbot.ai.dashscope.max-tokens:2000}")
+    @Value("${qqbot.ai.dashscope.max-tokens:4096}")
     private Integer maxTokens;
 
     /**
-     * 创建 OpenAiApi 实例，指向百炼 DashScope 兼容端点
+     * 创建 OpenAiApi 实例，指向百炼 MaaS OpenAI 兼容端点
+     *
+     * <p>使用 SpringAI 1.0.0 的 Builder 模式构建 OpenAiApi，
+     * 自动处理 API Key 和 Base URL 的配置。</p>
      *
      * @return 配置好的 OpenAiApi 实例
      */
     @Bean
     public OpenAiApi dashScopeApi() {
-        return new OpenAiApi(baseUrl, apiKey);
+        return OpenAiApi.builder()
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
+                .build();
     }
 
     /**
@@ -75,7 +82,10 @@ public class AiConfig {
                 .temperature(temperature)
                 .maxTokens(maxTokens)
                 .build();
-        return new OpenAiChatModel(dashScopeApi, options);
+        return OpenAiChatModel.builder()
+                .openAiApi(dashScopeApi)
+                .defaultOptions(options)
+                .build();
     }
 
     /**

@@ -17,10 +17,11 @@ export interface PageParams {
 
 /** 分页响应数据 */
 export interface PageResult<T> {
-  records: T[]
-  total: number
+  content: T[]
+  totalElements: number
+  totalPages: number
   size: number
-  current: number
+  number: number
 }
 
 /** 机器人状态 */
@@ -35,15 +36,22 @@ export interface BotStatus {
   activeUserCount: number
   /** WebSocket 连接状态 */
   wsConnected: boolean
+  /** 总消息数 */
+  totalMessageCount: number
+  /** 总用户数 */
+  totalUserCount: number
 }
 
 /** 聊天记录 */
 export interface ChatRecord {
   id: number
   userId: number
+  qqId: number
   nickname: string
   role: 'user' | 'assistant'
   content: string
+  messageType: string
+  groupId: number | null
   createTime: string
 }
 
@@ -53,5 +61,7 @@ export interface AiCharacter {
   name: string
   description: string
   systemPrompt: string
+  isDefault: boolean
+  enabled: boolean
   createTime: string
 }

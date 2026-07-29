@@ -41,7 +41,7 @@ async function loadCharacters() {
   try {
     const result = await getCharacters()
     if (result) {
-      characters.value = result as unknown as AiCharacter[]
+      characters.value = result
     }
   } catch (error) {
     console.error('加载角色列表失败:', error)

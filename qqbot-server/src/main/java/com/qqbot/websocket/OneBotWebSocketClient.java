@@ -108,6 +108,15 @@ public class OneBotWebSocketClient {
     }
 
     /**
+     * 查询 WebSocket 是否已连接
+     *
+     * @return true 表示已连接
+     */
+    public boolean isConnected() {
+        return client != null && client.isOpen();
+    }
+
+    /**
      * Bean 初始化后自动连接 WebSocket
      */
     @PostConstruct
@@ -205,13 +214,20 @@ public class OneBotWebSocketClient {
             Long groupId = json.getLong("group_id");
             Long selfId = json.getLong("self_id");
 
+            // 提取发送者昵称
+            String nickname = null;
+            JSONObject sender = json.getJSONObject("sender");
+            if (sender != null) {
+                nickname = sender.getStr("nickname");
+            }
+
             if (userId == null || message == null || message.isBlank()) {
                 log.debug("消息缺少必要字段: userId={}, message={}", userId, message);
                 return;
             }
 
             // 异步处理消息
-            messageHandler.handleMessage(messageType, userId, message, groupId, selfId);
+            messageHandler.handleMessage(messageType, userId, message, groupId, selfId, nickname);
 
         } catch (Exception e) {
             log.error("解析 OneBot 消息失败: {}", rawMessage, e);

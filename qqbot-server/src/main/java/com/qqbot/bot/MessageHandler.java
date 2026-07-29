@@ -1,8 +1,10 @@
 package com.qqbot.bot;
 
 import com.qqbot.ai.AiService;
+import com.qqbot.model.entity.QqUser;
 import com.qqbot.onebot.OneBotApi;
-import lombok.RequiredArgsConstructor;
+import com.qqbot.service.ChatRecordService;
+import com.qqbot.service.QqUserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -11,12 +13,14 @@ import org.springframework.stereotype.Component;
  * QQ 消息处理器
  *
  * <p>负责接收从 WebSocket 层传入的 QQ 消息，协调 AI 服务和 OneBot API
- * 完成消息回复。支持私聊和群聊两种消息类型。</p>
+ * 完成消息回复。处理流程包含用户注册、消息持久化和 AI 对话。</p>
  *
  * <p>处理流程：
  * <ol>
- *   <li>接收消息（message_type、user_id、message 等）</li>
+ *   <li>根据 QQ 号查找或创建用户记录</li>
+ *   <li>保存用户消息到数据库</li>
  *   <li>调用 {@link AiService} 获取 AI 回复</li>
+ *   <li>保存 AI 回复到数据库</li>
  *   <li>通过 {@link OneBotApi} 将回复发送回 QQ</li>
  * </ol></p>
  *
@@ -25,11 +29,23 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class MessageHandler {
 
     private final AiService aiService;
     private final OneBotApi oneBotApi;
+    private final QqUserService qqUserService;
+    private final ChatRecordService chatRecordService;
+
+    /**
+     * 构造函数注入
+     */
+    public MessageHandler(AiService aiService, OneBotApi oneBotApi,
+                          QqUserService qqUserService, ChatRecordService chatRecordService) {
+        this.aiService = aiService;
+        this.oneBotApi = oneBotApi;
+        this.qqUserService = qqUserService;
+        this.chatRecordService = chatRecordService;
+    }
 
     /**
      * 处理 QQ 消息（异步执行）
@@ -38,72 +54,94 @@ public class MessageHandler {
      * 使用 {@link Async} 注解确保不阻塞 WebSocket 消息接收线程。</p>
      *
      * @param messageType 消息类型：private（私聊）或 group（群聊）
-     * @param userId      发送者 QQ 号
+     * @param qqId        发送者 QQ 号
      * @param message     消息文本内容
      * @param groupId     群号（仅群聊时有值）
      * @param selfId      机器人自身 QQ 号
+     * @param nickname    发送者昵称（从 OneBot sender 信息中提取）
      */
     @Async("messageExecutor")
-    public void handleMessage(String messageType, Long userId, String message,
-                              Long groupId, Long selfId) {
+    public void handleMessage(String messageType, Long qqId, String message,
+                              Long groupId, Long selfId, String nickname) {
         try {
-            log.info("收到消息: type={}, userId={}, groupId={}, message={}",
-                    messageType, userId, groupId, message);
+            log.info("收到消息: type={}, qqId={}, groupId={}, nickname={}, message={}",
+                    messageType, qqId, groupId, nickname, message);
 
+            // 1. 查找或创建用户
+            QqUser user = qqUserService.findOrCreateUser(qqId, nickname);
+
+            // 2. 根据消息类型处理
             if ("private".equals(messageType)) {
-                handlePrivateMessage(userId, message);
+                handlePrivateMessage(user, qqId, nickname, message);
             } else if ("group".equals(messageType)) {
-                handleGroupMessage(groupId, userId, message);
+                handleGroupMessage(user, qqId, nickname, message, groupId);
             } else {
                 log.warn("未知消息类型: {}", messageType);
             }
         } catch (Exception e) {
-            log.error("处理消息异常: userId={}, message={}", userId, message, e);
+            log.error("处理消息异常: qqId={}, message={}", qqId, message, e);
         }
     }
 
     /**
      * 处理私聊消息
      *
-     * <p>直接调用 AI 获取回复，将结果发送给对应用户。
-     * 如果 AI 调用失败或返回空内容，发送预设的降级回复。</p>
+     * <p>持久化用户消息 → 调用 AI → 持久化 AI 回复 → 发送回复给用户。</p>
      *
-     * @param userId  发送者 QQ 号
-     * @param message 消息内容
+     * @param user     用户实体
+     * @param qqId     QQ 号
+     * @param nickname 用户昵称
+     * @param message  消息内容
      */
-    private void handlePrivateMessage(Long userId, String message) {
-        String reply = aiService.chat(userId, message);
+    private void handlePrivateMessage(QqUser user, Long qqId, String nickname, String message) {
+        // 保存用户消息
+        chatRecordService.saveUserMessage(user.getId(), qqId, nickname, message, "private", null);
+
+        // 调用 AI
+        String reply = aiService.chat(user.getId(), message);
         if (reply == null || reply.isBlank()) {
             reply = getFallbackReply();
         }
-        oneBotApi.sendPrivateMessage(userId, reply);
-        log.info("私聊回复: userId={}, reply={}", userId, reply);
+
+        // 保存 AI 回复
+        chatRecordService.saveAiReply(user.getId(), qqId, nickname, reply, "private", null);
+
+        // 发送回复
+        oneBotApi.sendPrivateMessage(qqId, reply);
+        log.info("私聊回复: qqId={}, reply={}", qqId, reply);
     }
 
     /**
      * 处理群聊消息
      *
-     * <p>群聊场景下调用 AI 获取回复并发送到对应群中。
-     * 注意：群聊消息只有在 @机器人 或被提及时才应被 WebSocket 层转发到此方法。</p>
+     * <p>持久化用户消息 → 调用 AI → 持久化 AI 回复 → 发送回复到群。</p>
      *
-     * @param groupId 群号
-     * @param userId  发送者 QQ 号
-     * @param message 消息内容
+     * @param user     用户实体
+     * @param qqId     QQ 号
+     * @param nickname 用户昵称
+     * @param message  消息内容
+     * @param groupId  群号
      */
-    private void handleGroupMessage(Long groupId, Long userId, String message) {
-        String reply = aiService.chat(userId, message);
+    private void handleGroupMessage(QqUser user, Long qqId, String nickname, String message, Long groupId) {
+        // 保存用户消息
+        chatRecordService.saveUserMessage(user.getId(), qqId, nickname, message, "group", groupId);
+
+        // 调用 AI
+        String reply = aiService.chat(user.getId(), message);
         if (reply == null || reply.isBlank()) {
             reply = getFallbackReply();
         }
+
+        // 保存 AI 回复
+        chatRecordService.saveAiReply(user.getId(), qqId, nickname, reply, "group", groupId);
+
+        // 发送回复
         oneBotApi.sendGroupMessage(groupId, reply);
-        log.info("群聊回复: groupId={}, userId={}, reply={}", groupId, userId, reply);
+        log.info("群聊回复: groupId={}, qqId={}, reply={}", groupId, qqId, reply);
     }
 
     /**
-     * 获取降级回复
-     *
-     * <p>当 AI 服务不可用或返回空内容时，使用此降级回复，
-     * 确保用户始终能得到反馈。</p>
+     * 获取降级回复（AI 调用失败时使用）
      *
      * @return 降级回复文本
      */

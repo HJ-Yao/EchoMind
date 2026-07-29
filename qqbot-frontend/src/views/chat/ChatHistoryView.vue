@@ -26,8 +26,8 @@ async function loadRecords() {
       size: pageSize.value,
     })
     if (result) {
-      records.value = result.records
-      total.value = result.total
+      records.value = result.content || []
+      total.value = result.totalElements || 0
     }
   } catch (error) {
     console.error('加载聊天记录失败:', error)
